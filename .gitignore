@@ -1,0 +1,6 @@
+# Ignore object files, shared libraries, executables and vscode things
+*.o
+*.a
+*.so
+*.exe
+*.vscode/

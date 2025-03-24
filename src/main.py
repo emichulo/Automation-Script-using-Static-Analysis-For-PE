@@ -24,13 +24,13 @@ def detect_packing(pe):
         entropy_value = calculate_entropy(section.get_data())
         print(f"Section {name}: Entropy = {entropy_value:.4f}")
         
-        # Common packers like UPX rename sections like upx0, upx1, etc, if this appears  it's almost certain the file has been packed.
+        # Common packers like UPX rename sections like upx0, upx1, etc.
         if name in [".upx0", ".upx1", "upx", ".packed"]:
             print(f"🚨 Packed section detected: {name}")
             packed = True
             score += 10
         
-        #If a packed section also has very high entropy, it likely contains compressed or encrypted malicious code.
+        # High entropy suggests compressed or encrypted code
         if entropy_value > 7.2:
             print(f"🚨 High entropy detected in {name}! Possible packing.")
             packed = True
@@ -60,12 +60,12 @@ def analyze_pe(file_path):
         print(f"Time Date Stamp   : {hex(pe.FILE_HEADER.TimeDateStamp)}")
         print(f"Characteristics   : {hex(pe.FILE_HEADER.Characteristics)}")
 
-        # A normal PE have multiple sections (.text, .data, .rdata, .bss, etc),
-        # malware authors often reduce the number of sections in packed or obfuscated files to hide code.
+        # A normal PE has multiple sections (.text, .data, .rdata, .bss, etc).
+        # Packed or obfuscated files may reduce section count.
         if pe.FILE_HEADER.NumberOfSections < 3:
             print("⚠️ Suspicious: Very few sections detected.")
             score += 10
-        
+
         # Optional Header Analysis
         print("\n📜 Optional Header")
         print(f"Entry Point       : {hex(pe.OPTIONAL_HEADER.AddressOfEntryPoint)}")
@@ -73,21 +73,38 @@ def analyze_pe(file_path):
         print(f"Size of Image     : {hex(pe.OPTIONAL_HEADER.SizeOfImage)}")
         print(f"Subsystem         : {hex(pe.OPTIONAL_HEADER.Subsystem)}")
         print(f"DLL Characteristics: {hex(pe.OPTIONAL_HEADER.DllCharacteristics)}")
-        
-        #The 0x40 flag (IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE) in DllCharacteristics means that the file
-        #  supports Address Space Layout Randomization (ASLR).
-        # While ASLR is a security feature, malware often enables it to make analysis harder (avoiding predictable memory addresses).
+
+        # New Check 1: Unusual ImageBase Address
+        if not (0x00400000 <= pe.OPTIONAL_HEADER.ImageBase <= 0x7FFFFFFF):
+            print("⚠️ Suspicious: Unusual ImageBase address detected!")
+            score += 10
+
+        # New Check 2: Abnormal Size of Headers
+        if not (0x200 <= pe.OPTIONAL_HEADER.SizeOfHeaders <= 0x1000):
+            print("⚠️ Suspicious: Unusual SizeOfHeaders value!")
+            score += 10
+
+        # New Check 3: Invalid Section Alignment
+        if pe.OPTIONAL_HEADER.SectionAlignment < 0x200:
+            print("⚠️ Suspicious: Section alignment is too small!")
+            score += 10
+
+        # The 0x40 flag (IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE) in DllCharacteristics means ASLR is enabled.
+        # Malware often enables this to make analysis harder.
         if pe.OPTIONAL_HEADER.DllCharacteristics & 0x40:
             print("⚠️ Suspicious: File has dynamic base enabled.")
             score += 10
 
-        #The Entry Point is where execution starts in a PE file.
-        #Normal programs usually have an entry point in .text at a reasonable address (e.g., 0x401000).
-        #If it's below 0x1000, the file might be manipulating execution flow, indicating a potential packed or malicious binary.
-        if pe.OPTIONAL_HEADER.AddressOfEntryPoint < 0x1000:
-            print("⚠️ Suspicious: Entry point in a low memory region.")
+        # New Check 4: Entry Point Anomaly (Outside Defined Sections)
+        ep = pe.OPTIONAL_HEADER.AddressOfEntryPoint
+        entry_point_in_section = any(
+            section.VirtualAddress <= ep < (section.VirtualAddress + section.Misc_VirtualSize)
+            for section in pe.sections
+        )
+        if not entry_point_in_section:
+            print("⚠️ Suspicious: Entry Point is outside defined sections!")
             score += 10
-        
+
         # Section Analysis
         print("\n📜 Sections")
         for section in pe.sections:
@@ -95,13 +112,18 @@ def analyze_pe(file_path):
             entropy_value = calculate_entropy(section.get_data())
             print(f"{name}: Virtual Address = {hex(section.VirtualAddress)}, Size = {section.Misc_VirtualSize}, Entropy = {entropy_value:.4f}")
             
-            # Entropy measures randomness. Values above 7.2 suggest high compression or encryption, which is common in packed malware.
-            # Normal .text sections (code) have entropy between 4.0 and 6.5, while compressed/encrypted sections can reach 7.8+.
-            # Packed files often encrypt their contents, and decryption happens at runtime.
+            # Entropy above 7.2 suggests obfuscation
             if entropy_value > 7.2:
                 print(f"⚠️ High entropy detected in {name}! Possible obfuscation.")
                 score += 10
-        
+
+        # New Check 5: Suspicious Characteristics Flags
+        if not (pe.FILE_HEADER.Characteristics & 0x2):  # 0x2 = Executable Image
+            print("⚠️ Suspicious: File is not marked as an executable!")
+            score += 10
+        if pe.FILE_HEADER.Characteristics & 0x2000:  # 0x2000 = DLL
+            print("ℹ️ Note: This is a DLL file.")
+
         # Checking Packing
         score += detect_packing(pe)
 
@@ -115,5 +137,5 @@ def analyze_pe(file_path):
         print(f"❌ Error processing file: {e}")
 
 # Example Usage
-pe_file = "Executables/exeName.exe"  # Change this to your PE file path
+pe_file = "yourPATH.exe"  # Change this to your PE file path
 analyze_pe(pe_file)
