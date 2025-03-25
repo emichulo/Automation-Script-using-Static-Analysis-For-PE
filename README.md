@@ -27,8 +27,9 @@ This application is designed to perform methods of static analysis automatically
 
 ## Usage
 
-1. -- Set the path to your folder with the PE's.
-   -- Name the text file for the analysis output.
+1. 
+- Set the path to your folder with the PE's.
+- Name the text file for the analysis output.
 
 2. Run the application:
 
