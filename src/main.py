@@ -40,6 +40,10 @@ def analyze_pe(file_path):
         score = 0
         status = ''
         
+        # Files without an extension are suspicious
+        if not os.path.splitext(file_path)[1]:
+            score += 10
+        
         # Malicious files often have very few sections to reduce their footprint
         if pe.FILE_HEADER.NumberOfSections < 3:
             score += 10
@@ -83,22 +87,26 @@ def analyze_pe(file_path):
 
         if score > 50:
             status = 'MALIGN'
-        else: status = 'BENIGN'
-        
-        print(score)
+        else:
+            status = 'BENIGN'
 
+        print(score)
+        
         return status
+    except pefile.PEFormatError:
+        print(f"Skipping {file_path}: Not a PE file.")
+        return None
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
         return None
 
 def analyze_folder(folder_path, output_file):
-    """Analyze all PE files in a folder and save results."""
+    """Analyze all files in a folder and save results."""
     results = []
     
     for file_name in os.listdir(folder_path):
         file_path = os.path.join(folder_path, file_name)
-        if os.path.isfile(file_path) and file_name.lower().endswith(".exe"):
+        if os.path.isfile(file_path):  # Process all files regardless of extension
             print(f"Analyzing {file_name}...")
             status = analyze_pe(file_path)
             if status is not None:
@@ -111,6 +119,6 @@ def analyze_folder(folder_path, output_file):
     print(f"Results saved to {output_file}")
 
 # Example usage
-folder_path = "path/toPEfolder"  # Change this to your folder path
+folder_path = "exe"  # Change this to your folder path
 output_file = "pe_analysis_results.txt"
 analyze_folder(folder_path, output_file)
