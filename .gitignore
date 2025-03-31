@@ -8,3 +8,7 @@
 
 #Files
 test.py
+pe_analysis_results.txt
+
+#Folders
+exe/

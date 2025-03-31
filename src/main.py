@@ -3,6 +3,7 @@ import os
 import math
 from collections import Counter
 from scipy.stats import entropy
+import time
 
 def calculate_entropy(data):
     """Calculate the entropy of a given byte sequence."""
@@ -104,6 +105,9 @@ def analyze_folder(folder_path, output_file):
     """Analyze all files in a folder and save results."""
     results = []
     
+    # Record the start time
+    start_time = time.time()
+    
     for file_name in os.listdir(folder_path):
         file_path = os.path.join(folder_path, file_name)
         if os.path.isfile(file_path):  # Process all files regardless of extension
@@ -112,6 +116,18 @@ def analyze_folder(folder_path, output_file):
             if status is not None:
                 results.append((file_name, status))
     
+    # Record the end time
+    end_time = time.time()
+    
+    # Calculate the time taken
+    duration = end_time - start_time
+    minutes = int(duration // 60)
+    seconds = int(duration % 60)
+    
+    # Display the total time taken
+    print(f"\nTotal time taken: {minutes} minutes and {seconds} seconds")
+    
+    # Save the results to the output file
     with open(output_file, "w") as f:
         for file_name, status in results:
             f.write(f"{file_name}: {status}\n")
