@@ -8,7 +8,7 @@ This application is designed to perform methods of static analysis automatically
 
 ## Features
 
-- File Header Analysis: This is the first static mathod analysis, I developed a small numeric risk assessment just for this method. 
+- File Header Analysis: This is the first static mathod analysis, I developed a small numeric risk assessment just for this method.
 
 
 ## Installation
