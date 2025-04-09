@@ -17,6 +17,39 @@ packer_signatures = {
     "Obsidium": [".obs", ".obsidium"]
 }
 
+def pattern_match_file_header(checker_flags, initial_score):
+    # 1 = Low entropy < 6.
+    # 2 = Check for packers.  0%
+    # 3 = Entropy for each section.
+    # 4 = Files w/o extension.  0%
+    # 5 = Files with <3 sections. 4%
+    # 6 = Unusual ImageBase.      14%
+    # 7 = Atypical SizeOfHeaders.  0%
+    # 8 = Very small section alignment.  0%
+    # 9 = ASLR.                          95%
+    # 10 = Entry point is outside defined sections. 30%
+    # 11 = Hihg entropy > 7.
+
+    rare_flags = [2, 4, 5, 6, 7, 8, 10, 11]
+    moderate_flags = [1, 3, 9]
+
+    rare_hits = sum(1 for i in rare_flags if checker_flags.get(i, False))
+    moderate_hits = sum(1 for i in moderate_flags if checker_flags.get(i, False))
+
+    # Pattern logic
+    if rare_hits == 2:
+        initial_score += 10
+    elif rare_hits >= 3 and rare_hits <= 5:
+        initial_score += 15
+    elif rare_hits >= 5:
+        initial_score += 15
+    elif rare_hits <= 1 and moderate_hits <= 1:
+        initial_score -= 15
+    elif rare_hits <= 1 and moderate_hits <= 3:
+        initial_score -= 15
+
+    return initial_score
+
 def calculate_entropy(data):
     """Calculate the entropy of a given byte sequence."""
     score = 0
@@ -55,12 +88,19 @@ def analyze_pe(file_path):
         pe = pefile.PE(file_path)
         score = 0
         status = ''
+        checker_flags = {}
 
         with open(file_path, "rb") as f:
             file_data = f.read()
-            
-        entropy_score = calculate_entropy(file_data) # 1.Calculate entropy score for PE file.
+
+        # 1.Calculate entropy score for PE file.
+        entropy_score = calculate_entropy(file_data) 
         score += entropy_score
+        if entropy_score < 6:
+            checker_flags[1] = True
+        elif entropy_score > 6:
+            checker_flags[11] = True
+            
 
         for section in pe.sections:
 
@@ -68,34 +108,44 @@ def analyze_pe(file_path):
             # 2.Packed files often rename sections to known packer names like UPX, etc.
             if name in packer_signatures:
                 score += 10
+                checker_flags[2] = True
 
-            entropy_score = calculate_entropy(section.get_data()) # 3.Calculate entropy score for each section.
+            # 3.Calculate entropy score for each section.
+            entropy_score = calculate_entropy(section.get_data()) 
             score += entropy_score
+            if entropy_score > 0:
+                checker_flags[3] = True
           
         # 4.Files without an extension are suspicious
         if not os.path.splitext(file_path)[1]:
-            score += 10
-        
+            score += 20
+            checker_flags[4] = True
+
         # 5.Malicious files often have very few sections to reduce their footprint
         if pe.FILE_HEADER.NumberOfSections < 3:
-            score += 10
+            score += 19.6
+            checker_flags[5] = True
         
         # 6.Unusual ImageBase values can indicate obfuscation or unusual execution environments
         if not (0x00400000 <= pe.OPTIONAL_HEADER.ImageBase <= 0x7FFFFFFF):
-            score += 10
+            score += 18.4
+            checker_flags[6] = True
         
         # 7.Atypical SizeOfHeaders may indicate attempts to evade analysis tools
         if not (0x200 <= pe.OPTIONAL_HEADER.SizeOfHeaders <= 0x1000):
-            score += 10
+            score += 20
+            checker_flags[7] = True
         
         # 8.Very small section alignment can suggest an improperly structured or obfuscated binary
         if pe.OPTIONAL_HEADER.SectionAlignment < 0x200:
-            score += 10
-        
+            score += 20
+            checker_flags[8] = True
+
         # 9.Malware may enable ASLR (Address Space Layout Randomization) to make analysis harder
         if pe.OPTIONAL_HEADER.DllCharacteristics & 0x40:
-            score += 10
-        
+            score += 5
+            checker_flags[9] = True
+
         ep = pe.OPTIONAL_HEADER.AddressOfEntryPoint
         entry_point_in_section = any(
             section.VirtualAddress <= ep < (section.VirtualAddress + section.Misc_VirtualSize)
@@ -103,15 +153,16 @@ def analyze_pe(file_path):
         )
         # 10.If the entry point is outside defined sections, it could indicate shellcode or obfuscation
         if not entry_point_in_section:
-            score += 10
+            score += 17
+            checker_flags[10] = True
+
+        score = pattern_match_file_header(checker_flags, score)
         
-        if score > 50:
+        if score > 75:
             status = 'MALIGN'
         else:
             status = 'BENIGN'
-
-        #print(score)
-        
+    
         return status, score
     except pefile.PEFormatError:
         print(f"Skipping {file_path}: Not a PE file.")
@@ -150,6 +201,7 @@ def analyze_folder(folder_path, output_file):
     with open(output_file, "w") as f:
         for file_name, status, score in results:
             f.write(f"{file_name}: {status} {score}\n")
+
     
     print(f"Results saved to {output_file}")
 
