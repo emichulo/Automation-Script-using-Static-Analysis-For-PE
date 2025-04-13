@@ -38,7 +38,7 @@ def pattern_match_file_header(checker_flags, initial_score):
 
     # Pattern logic
     if rare_hits == 2:
-        initial_score += 10
+        initial_score += 15
     elif rare_hits >= 3 and rare_hits <= 5:
         initial_score += 15
     elif rare_hits >= 5:

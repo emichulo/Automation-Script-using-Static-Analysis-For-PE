@@ -8,7 +8,17 @@ This application is designed to perform methods of static analysis automatically
 
 ## Features
 
-- File Header Analysis: This is the first static mathod analysis, I developed a small numeric risk assessment just for this method.
+1. File header analysis
+- PE file entropy.
+- Check for common packers.
+- Entropy for each section.
+- Files w/o extension.
+- Check for numbers of sections.
+- Unusual ImageBase.
+- Atypical SizeOfHeaders.
+- Very small section alignment.
+- ASLR (Address Space Layout Randomization).
+- Entry point out outside defined sections.
 
 
 ## Installation
