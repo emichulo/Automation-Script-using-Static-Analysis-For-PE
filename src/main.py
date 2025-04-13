@@ -174,6 +174,8 @@ def analyze_pe(file_path):
 def analyze_folder(folder_path, output_file):
     """Analyze all files in a folder and save results."""
     results = []
+    benign_count = 0
+    malign_count = 0
     
     # Record the start time
     start_time = time.time()
@@ -182,27 +184,34 @@ def analyze_folder(folder_path, output_file):
         file_path = os.path.join(folder_path, file_name)
         if os.path.isfile(file_path):  # Process all files regardless of extension
             print(f"Analyzing {file_name}...")
-            status, score = analyze_pe(file_path)
-            if status is not None:
+            result = analyze_pe(file_path)
+            if result is not None:
+                status, score = result
                 results.append((file_name, status, score))
+                if status == 'BENIGN':
+                    benign_count += 1
+                elif status == 'MALIGN':
+                    malign_count += 1
     
     # Record the end time
     end_time = time.time()
-    
-    # Calculate the time taken
     duration = end_time - start_time
     minutes = int(duration // 60)
     seconds = int(duration % 60)
     
-    # Display the total time taken
     print(f"\nTotal time taken: {minutes} minutes and {seconds} seconds")
     
     # Save the results to the output file
     with open(output_file, "w") as f:
         for file_name, status, score in results:
-            f.write(f"{file_name}: {status} {score}\n")
+            f.write(f"{file_name}: {status} {score:.2f}\n")
+        
+        # Write summary
+        f.write("\nSummary:\n")
+        f.write(f"Total Files: {benign_count + malign_count}\n")
+        f.write(f"BENIGN: {benign_count}\n")
+        f.write(f"MALIGN: {malign_count}\n")
 
-    
     print(f"Results saved to {output_file}")
 
 folder_path = "exe"  # Change this to your folder path
