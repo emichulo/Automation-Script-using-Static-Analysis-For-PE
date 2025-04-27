@@ -4,49 +4,49 @@ import math
 from collections import Counter
 from scipy.stats import entropy
 import time
+import datetime
+import yara
 
-packer_signatures = {
-    "UPX": [".upx0", ".upx1", "upx", ".packed"],
-    "ASPack": [".aspack", ".adata"],
-    "FSG": [".fsg", ".FSG!"],
-    "MPRESS": [".MPRESS1", ".MPRESS2"],
-    "PECompact": [".pec", ".pec1", ".pec2"],
-    "Themida": [".themida"],
-    "NsPack": [".nsp1", ".nsp0", ".nsp2"],
-    "EXE32": [".exe32", ".exepack"],
-    "Obsidium": [".obs", ".obsidium"]
-}
+# Load YARA rules once
+yara_rules = yara.compile(filepath="Yara/packer.yar")
+
+safe_packer_keywords = [
+    "NETexecutableMicrosoft",
+    "NETDLLMicrosoft",
+    "Microsoft",
+]
+
+def is_safe_packer(matched_rules):
+    """Check if any matched YARA rule is a safe/legal packer."""
+    for rule in matched_rules:
+        for keyword in safe_packer_keywords:
+            if keyword.lower() in rule.lower():
+                return True
+    return False
+
 
 def pattern_match_file_header(checker_flags, initial_score):
-    # 1 = Low entropy < 6.
-    # 2 = Check for packers.  0%
-    # 3 = Entropy for each section.
-    # 4 = Files w/o extension.  0%
-    # 5 = Files with <3 sections. 4%
-    # 6 = Unusual ImageBase.      14%
-    # 7 = Atypical SizeOfHeaders.  0%
-    # 8 = Very small section alignment.  0%
-    # 9 = ASLR.                          95%
-    # 10 = Entry point is outside defined sections. 30%
-    # 11 = Hihg entropy > 7.
+    # 1 = Low entropy.
+    # 2 = Hihg entropy.
+    # 3 = Entropy for each section high.
+    # 4 = Atypical SizeOfHeaders.
+    # 5 = Very small section alignment.
+    # 6 = Unusual ImageBase values. 
+    # 7 = entry point is outside defined sections.
+    # 8 = Invalid or Unusual TimeDateStamp.
 
-    rare_flags = [2, 4, 5, 6, 7, 8, 10, 11]
-    moderate_flags = [1, 3, 9]
+    rare_flags = [2, 3, 4, 5, 6, 7, 8]
+    moderate_flags = [1]
 
     rare_hits = sum(1 for i in rare_flags if checker_flags.get(i, False))
     moderate_hits = sum(1 for i in moderate_flags if checker_flags.get(i, False))
 
     # Pattern logic
-    if rare_hits == 2:
-        initial_score += 15
-    elif rare_hits >= 3 and rare_hits <= 5:
-        initial_score += 15
-    elif rare_hits >= 5:
-        initial_score += 15
-    elif rare_hits <= 1 and moderate_hits <= 1:
-        initial_score -= 15
-    elif rare_hits <= 1 and moderate_hits <= 3:
-        initial_score -= 15
+    #if rare_hits == 2:
+    #    initial_score += 10
+    #elif rare_hits >= 3:
+    #    initial_score += 20
+
 
     return initial_score
 
@@ -101,64 +101,66 @@ def analyze_pe(file_path):
         elif entropy_score > 6:
             checker_flags[11] = True
             
-
+        section_scores = []
         for section in pe.sections:
 
             name = section.Name.decode(errors="ignore").strip().lower()
-            # 2.Packed files often rename sections to known packer names like UPX, etc.
-            if name in packer_signatures:
-                score += 10
+            # 2.Calculate entropy score for each section.
+            entropy_score = calculate_entropy(section.get_data())
+            section_scores.append(entropy_score)
+            if entropy_score > 15:
                 checker_flags[2] = True
 
-            # 3.Calculate entropy score for each section.
-            entropy_score = calculate_entropy(section.get_data()) 
-            score += entropy_score
-            if entropy_score > 0:
-                checker_flags[3] = True
-          
-        # 4.Files without an extension are suspicious
-        if not os.path.splitext(file_path)[1]:
-            score += 20
-            checker_flags[4] = True
+            # 3.Packed files often rename sections to known packer names like UPX, etc.
+            try:
+                matches = yara_rules.match(data=section.get_data())
+                if matches:
+                    matched_rule_names = [match.rule for match in matches]
+                    
+                    if not is_safe_packer(matched_rule_names):
+                        score += 15  # Increase score if suspicious packing detected
+                        checker_flags[3] = True  # Set packing flag
+                    else:
+                        score -= 10
+            except Exception as e:
+                print(f"YARA matching failed for section {name} in {file_path}: {e}")
 
-        # 5.Malicious files often have very few sections to reduce their footprint
-        if pe.FILE_HEADER.NumberOfSections < 3:
-            score += 19.6
+
+        # 4.Atypical SizeOfHeaders may indicate attempts to evade analysis
+        if not (0x200 <= pe.OPTIONAL_HEADER.SizeOfHeaders <= 0x1000):
+            score += 10
+            checker_flags[4] = True      
+
+        # 5.Very small section alignment can suggest an improperly structured or obfuscated binary
+        if pe.OPTIONAL_HEADER.SectionAlignment < 0x200:
+            score += 10
             checker_flags[5] = True
         
         # 6.Unusual ImageBase values can indicate obfuscation or unusual execution environments
         if not (0x00400000 <= pe.OPTIONAL_HEADER.ImageBase <= 0x7FFFFFFF):
-            score += 18.4
+            score += 8.4
             checker_flags[6] = True
         
-        # 7.Atypical SizeOfHeaders may indicate attempts to evade analysis tools
-        if not (0x200 <= pe.OPTIONAL_HEADER.SizeOfHeaders <= 0x1000):
-            score += 20
-            checker_flags[7] = True
-        
-        # 8.Very small section alignment can suggest an improperly structured or obfuscated binary
-        if pe.OPTIONAL_HEADER.SectionAlignment < 0x200:
-            score += 20
-            checker_flags[8] = True
-
-        # 9.Malware may enable ASLR (Address Space Layout Randomization) to make analysis harder
-        if pe.OPTIONAL_HEADER.DllCharacteristics & 0x40:
-            score += 5
-            checker_flags[9] = True
-
+        # 7.If the entry point is outside defined sections, it could indicate shellcode or obfuscation
         ep = pe.OPTIONAL_HEADER.AddressOfEntryPoint
         entry_point_in_section = any(
             section.VirtualAddress <= ep < (section.VirtualAddress + section.Misc_VirtualSize)
             for section in pe.sections
         )
-        # 10.If the entry point is outside defined sections, it could indicate shellcode or obfuscation
         if not entry_point_in_section:
-            score += 17
-            checker_flags[10] = True
+            score += 7
+            checker_flags[7] = True
 
         score = pattern_match_file_header(checker_flags, score)
-        
-        if score > 75:
+
+        # 8.Invalid or Unusual TimeDateStamp
+        timestamp = pe.FILE_HEADER.TimeDateStamp
+        build_time = datetime.datetime.utcfromtimestamp(timestamp)
+        if build_time.year < 2000:
+            score += 9.8
+            checker_flags[8] = True
+        ####SCORING##########
+        if score > 42:
             status = 'MALIGN'
         else:
             status = 'BENIGN'

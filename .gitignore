@@ -9,7 +9,10 @@
 #Files
 test.py
 pe_analysis_results.txt
+src/main2.py
+src/test.py
 
 #Folders
 exe/
 test/
+Yara/
