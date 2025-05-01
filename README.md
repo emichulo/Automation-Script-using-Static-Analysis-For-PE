@@ -20,6 +20,12 @@ This application is designed to perform methods of static analysis automatically
 - ASLR (Address Space Layout Randomization).
 - Entry point out outside defined sections.
 
+## Requirements
+
+1. At least Python 3.12.5 
+
+2. MSVC v14.xx
+
 
 ## Installation
 
