@@ -163,7 +163,7 @@ def analyze_pe(file_path):
         score = pattern_match_file_header(checker_flags, score)
 
         ####SCORING##########
-        if score > 42:
+        if score > 47:
             status = 'MALIGN'
         else:
             status = 'BENIGN'
