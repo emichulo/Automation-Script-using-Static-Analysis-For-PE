@@ -10,7 +10,9 @@ import yara
 # Load YARA rules once
 yara_rules_packed = yara.compile(filepath="Yara/packer.yar")
 yara_rules_strings = yara.compile(filepath="Yara/suspicious_strings.yar")
-yara_rules_dlls = yara.compile(filepath="Yara/dlls.yar")
+yara_rules_dlls = yara.compile(filepath="Yara/Dlls.yar")
+yara_rules_ip = yara.compile(filepath="Yara/ip.yar")
+yara_rules_url = yara.compile(filepath="Yara/url.yar")
 
 def pattern_match_file_header(checker_flags, initial_score):
     
@@ -25,6 +27,8 @@ def pattern_match_file_header(checker_flags, initial_score):
     # 9 = Suspicious Strings.
     # 10 = 
     # 11 = High file entropy.
+    # 12 = ip
+    # 13 = url
 
     if checker_flags.get(3, False) and checker_flags.get(9, False):
         initial_score += 10
@@ -107,7 +111,7 @@ def analyze_pe(file_path):
             matches = yara_rules_packed.match(file_path)
                     
             if matches:
-                score += 10  # Increase score if suspicious packing detected
+                score += 10 * len(matches)  # Increase score if suspicious packing detected
                 checker_flags[3] = True  # Set packing flag
         except Exception as e:
             print(f"YARA packed matching failed for file in {file_path}: {e}")
@@ -150,7 +154,7 @@ def analyze_pe(file_path):
             matches = yara_rules_strings.match(file_path)
                     
             if matches:
-                score += 9  # Increase score if suspicious strings detected
+                score += 9 * len(matches) # Increase score if suspicious strings detected
                 checker_flags[9] = True  # Set strings flag
         except Exception as e:
             print(f"YARA suspicious string matching failed for file in {file_path}: {e}")
@@ -160,11 +164,30 @@ def analyze_pe(file_path):
             matches = yara_rules_dlls.match(file_path)
                     
             if matches:
-                score += 10  # Increase score if suspicious DLLs detected
+                score += 10 * len(matches) # Increase score if suspicious DLLs detected
                 checker_flags[10] = True  # Set DLLs flag
         except Exception as e:
             print(f"YARA suspicious string matching failed for file in {file_path}: {e}")
 
+         # 12.Suspicious ip with YARA
+        try:
+            matches = yara_rules_dlls.match(file_path)
+                    
+            if matches:
+                score += 6  # Increase score if suspicious DLLs detected
+                checker_flags[11] = True  # Set DLLs flag
+        except Exception as e:
+            print(f"YARA suspicious ip matching failed for file in {file_path}: {e}")
+
+        # 13.Suspicious url with YARA
+        try:
+            matches = yara_rules_dlls.match(file_path)
+                    
+            if matches:
+                score += 6  # Increase score if suspicious DLLs detected
+                checker_flags[12] = True  # Set DLLs flag
+        except Exception as e:
+            print(f"YARA url ip matching failed for file in {file_path}: {e}")
 
         score = pattern_match_file_header(checker_flags, score)
 
