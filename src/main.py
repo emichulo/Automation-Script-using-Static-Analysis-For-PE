@@ -8,45 +8,30 @@ import datetime
 import yara
 
 # Load YARA rules once
-yara_rules = yara.compile(filepath="Yara/packer.yar")
-
-safe_packer_keywords = [
-    "NETexecutableMicrosoft",
-    "NETDLLMicrosoft",
-    "Microsoft",
-]
-
-def is_safe_packer(matched_rules):
-    """Check if any matched YARA rule is a safe/legal packer."""
-    for rule in matched_rules:
-        for keyword in safe_packer_keywords:
-            if keyword.lower() in rule.lower():
-                return True
-    return False
-
+yara_rules_packed = yara.compile(filepath="Yara/packer.yar")
+yara_rules_strings = yara.compile(filepath="Yara/suspicious_strings.yar")
+yara_rules_dlls = yara.compile(filepath="Yara/dlls.yar")
 
 def pattern_match_file_header(checker_flags, initial_score):
+    
     # 1 = Low entropy.
-    # 2 = Hihg entropy.
-    # 3 = Entropy for each section high.
+    # 2 = Entropy on section high.
+    # 3 = Packed.
     # 4 = Atypical SizeOfHeaders.
     # 5 = Very small section alignment.
     # 6 = Unusual ImageBase values. 
     # 7 = entry point is outside defined sections.
     # 8 = Invalid or Unusual TimeDateStamp.
+    # 9 = Suspicious Strings.
+    # 10 = 
+    # 11 = High file entropy.
 
-    rare_flags = [2, 3, 4, 5, 6, 7, 8]
-    moderate_flags = [1]
-
-    rare_hits = sum(1 for i in rare_flags if checker_flags.get(i, False))
-    moderate_hits = sum(1 for i in moderate_flags if checker_flags.get(i, False))
-
-    # Pattern logic
-    #if rare_hits == 2:
-    #    initial_score += 10
-    #elif rare_hits >= 3:
-    #    initial_score += 20
-
+    if checker_flags.get(3, False) and checker_flags.get(9, False):
+        initial_score += 10
+        print("Packed and sus!!!!!!!")
+    elif    checker_flags.get(3, False) and checker_flags.get(9, True):
+        initial_score -= 10
+        print("Packed and no sus!!!!!!!")
 
     return initial_score
 
@@ -105,25 +90,21 @@ def analyze_pe(file_path):
         for section in pe.sections:
 
             name = section.Name.decode(errors="ignore").strip().lower()
-            # 2.Calculate entropy score for each section.
+        # 2.Calculate entropy score for each section.
             entropy_score = calculate_entropy(section.get_data())
             section_scores.append(entropy_score)
             if entropy_score > 15:
                 checker_flags[2] = True
 
-            # 3.Packed files often rename sections to known packer names like UPX, etc.
-            try:
-                matches = yara_rules.match(data=section.get_data())
-                if matches:
-                    matched_rule_names = [match.rule for match in matches]
+        # 3.Packed files often rename sections to known packer names like UPX, etc.
+        try:
+            matches = yara_rules_packed.match(file_path)
                     
-                    if not is_safe_packer(matched_rule_names):
-                        score += 15  # Increase score if suspicious packing detected
-                        checker_flags[3] = True  # Set packing flag
-                    else:
-                        score -= 10
-            except Exception as e:
-                print(f"YARA matching failed for section {name} in {file_path}: {e}")
+            if matches:
+                score += 10  # Increase score if suspicious packing detected
+                checker_flags[3] = True  # Set packing flag
+        except Exception as e:
+            print(f"YARA packed matching failed for file in {file_path}: {e}")
 
 
         # 4.Atypical SizeOfHeaders may indicate attempts to evade analysis
@@ -151,14 +132,36 @@ def analyze_pe(file_path):
             score += 7
             checker_flags[7] = True
 
-        score = pattern_match_file_header(checker_flags, score)
-
         # 8.Invalid or Unusual TimeDateStamp
         timestamp = pe.FILE_HEADER.TimeDateStamp
         build_time = datetime.datetime.utcfromtimestamp(timestamp)
         if build_time.year < 2000:
             score += 9.8
             checker_flags[8] = True
+
+        # 9.Suspicious strings with YARA
+        try:
+            matches = yara_rules_strings.match(file_path)
+                    
+            if matches:
+                score += 9  # Increase score if suspicious strings detected
+                checker_flags[9] = True  # Set strings flag
+        except Exception as e:
+            print(f"YARA suspicious string matching failed for file in {file_path}: {e}")
+
+        # 10.Suspicious Dlls import with YARA
+        try:
+            matches = yara_rules_strings.match(file_path)
+                    
+            if matches:
+                score += 10  # Increase score if suspicious DLLs detected
+                checker_flags[10] = True  # Set DLLs flag
+        except Exception as e:
+            print(f"YARA suspicious string matching failed for file in {file_path}: {e}")
+
+
+        score = pattern_match_file_header(checker_flags, score)
+
         ####SCORING##########
         if score > 42:
             status = 'MALIGN'
