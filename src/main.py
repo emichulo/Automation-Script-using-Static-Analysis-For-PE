@@ -33,6 +33,12 @@ def pattern_match_file_header(checker_flags, initial_score):
         initial_score -= 10
         print("Packed and no sus!!!!!!!")
 
+    if checker_flags.get(3, False) and checker_flags.get(9, False) and checker_flags.get(10, False):
+        initial_score += 20
+
+    if  checker_flags.get(9, False) and checker_flags.get(10, False):
+        initial_score += 20
+
     return initial_score
 
 def calculate_entropy(data):
@@ -151,7 +157,7 @@ def analyze_pe(file_path):
 
         # 10.Suspicious Dlls import with YARA
         try:
-            matches = yara_rules_strings.match(file_path)
+            matches = yara_rules_dlls.match(file_path)
                     
             if matches:
                 score += 10  # Increase score if suspicious DLLs detected
