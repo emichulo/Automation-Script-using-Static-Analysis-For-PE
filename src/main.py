@@ -25,10 +25,10 @@ def pattern_match_file_header(checker_flags, initial_score):
     # 7 = entry point is outside defined sections.
     # 8 = Invalid or Unusual TimeDateStamp.
     # 9 = Suspicious Strings.
-    # 10 = 
+    # 10 = Dlls.
     # 11 = High file entropy.
-    # 12 = ip
-    # 13 = url
+    # 12 = Ip.
+    # 13 = Url.
 
     if checker_flags.get(3, False) and checker_flags.get(9, False):
         initial_score += 10
@@ -174,8 +174,8 @@ def analyze_pe(file_path):
             matches = yara_rules_dlls.match(file_path)
                     
             if matches:
-                score += 6  # Increase score if suspicious DLLs detected
-                checker_flags[11] = True  # Set DLLs flag
+                score += 6  # Increase score if suspicious Ip detected
+                checker_flags[12] = True  # Set Ip flag
         except Exception as e:
             print(f"YARA suspicious ip matching failed for file in {file_path}: {e}")
 
@@ -184,8 +184,8 @@ def analyze_pe(file_path):
             matches = yara_rules_dlls.match(file_path)
                     
             if matches:
-                score += 6  # Increase score if suspicious DLLs detected
-                checker_flags[12] = True  # Set DLLs flag
+                score += 6  # Increase score if suspicious url detected
+                checker_flags[13] = True  # Set url flag
         except Exception as e:
             print(f"YARA url ip matching failed for file in {file_path}: {e}")
 
