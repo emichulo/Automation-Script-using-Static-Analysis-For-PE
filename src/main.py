@@ -25,17 +25,16 @@ def pattern_match_file_header(checker_flags, initial_score):
     # 7 = entry point is outside defined sections.
     # 8 = Invalid or Unusual TimeDateStamp.
     # 9 = Suspicious Strings.
-    # 10 = Dlls.
+    # 10 = Import suspicious of Dlls.
     # 11 = High file entropy.
-    # 12 = Ip.
-    # 13 = Url.
+    # 12 = Ips.
+    # 13 = Urls.
 
     if checker_flags.get(3, False) and checker_flags.get(9, False):
-        initial_score += 10
-        print("Packed and sus!!!!!!!")
-    elif    checker_flags.get(3, False) and checker_flags.get(9, True):
-        initial_score -= 10
-        print("Packed and no sus!!!!!!!")
+        initial_score += 20
+
+    elif    checker_flags.get(3, False) and (checker_flags.get(11, True) or checker_flags.get(2, True)):
+        initial_score += 20
 
     if checker_flags.get(3, False) and checker_flags.get(9, False) and checker_flags.get(10, False):
         initial_score += 20
@@ -191,8 +190,8 @@ def analyze_pe(file_path):
 
         score = pattern_match_file_header(checker_flags, score)
 
-        ####SCORING##########
-        if score > 47:
+        ##############SCORING##########
+        if score > 47:                 # Sweet spot
             status = 'MALIGN'
         else:
             status = 'BENIGN'
@@ -249,5 +248,5 @@ def analyze_folder(folder_path, output_file):
     print(f"Results saved to {output_file}")
 
 folder_path = "exe"  # Change this to your folder path
-output_file = "pe_analysis_results.txt"   # Change this to your txt path if not will be created
+output_file = "pe_analysis_results.txt"   # Change this to your txt path
 analyze_folder(folder_path, output_file)
