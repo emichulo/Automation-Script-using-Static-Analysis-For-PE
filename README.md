@@ -8,17 +8,23 @@ This application is designed to perform methods of static analysis automatically
 
 ## Features
 
-1. File header analysis
-- PE file entropy.
-- Check for common packers.
-- Entropy for each section.
-- Files w/o extension.
-- Check for numbers of sections.
-- Unusual ImageBase.
-- Atypical SizeOfHeaders.
-- Very small section alignment.
-- ASLR (Address Space Layout Randomization).
-- Entry point out outside defined sections.
+1. File metadata analysis
+- `Size Of Headers`
+- `Section Alignment`
+- `Image Base`
+- `Address Of Entry Point`
+- `Time Date Stamp`
+
+2. Exponential entropy calculation
+- on file level
+- on section level
+
+3. Yara checks
+- Packed/Obfuscated
+- Suspicious strings
+- Suspicious Dll imports
+- Suspicious IPs
+- Suspicious URLs
 
 ## Requirements
 
